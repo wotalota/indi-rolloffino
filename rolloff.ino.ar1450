@@ -1,0 +1,416 @@
+/*
+ * Setup for a Arduino Due.   
+ * Aleko AR1450 gate opener example for roof motor control from the INDI rolloffino roof driver.   
+ * 
+ * tg August 2018  Original
+ * tg February 2020 Generalize to make less installation specific
+ *                  Add unspecified usage AUX switch and relay
+ *                  Communication protocol in terms of function not switches/relays
+ *                  ~ 15KB 2% of Due, 50% of Nano
+ */
+
+/*
+ * This version of rolloff.ino is modified to work with an Aleko 1450 gate opener.
+ * The Aleko controller includes a single push button motor control connection.
+ *
+ * If not using an Arduino Due, change SerialUSB() calls to Serial(). 
+ * If using Arduino Due or perhaps others with similar 2 USB ports. Connect to INDI host via Programming Port. 
+ * Under Tools both Board and Port should select Programmers Port. Use SerialUSB() to communicate with host.
+ * If a second USB cable is connected to the Native port the monitor console can then be used for degug messages 
+ * using Serial() connection. 
+ *
+ * The auxiliary button and light in the remote driver are of unspecified purpose. button could be used to set a relay, 
+ * light can indicate the state of a switch. Intended to address request to be able to turn on and off power to a roof motor.
+*/
+
+#define BAUD_RATE 38400
+
+// Define name to pin assignments
+#define SWITCH_1 31
+#define SWITCH_2 32
+#define SWITCH_3 33
+#define SWITCH_4 34
+
+#define RELAY_1 41
+#define RELAY_2 42
+#define RELAY_3 43
+#define RELAY_4 44
+
+// Indirection to define a functional name in terms of a switch
+// Use 0 if switch not implemented
+#define STATE_OPENED SWITCH_1
+#define STATE_CLOSED SWITCH_2
+#define STATE_LOCKED SWITCH_3
+#define STATE_AUX    0
+
+// Indirection to define a functional name in terms of a relay
+// Use 0 if function not supported
+#define FUNC_OPEN RELAY_1
+#define FUNC_CLOSE RELAY_1    // For a single button controller might map this also to RELAY_1
+#define FUNC_ABORT RELAY_1    // For a single button controller might map this also to RELAY_1
+#define FUNC_AUX   0
+
+/*
+ * For the relay that the function is mapped to indicate if that relay is to be momentarily closed 
+ * or held in a closed position. 
+ * If for example the relay is intended to provide power to a motor the need might be to 
+ * keep it closed until a relay off is received. 
+ * If a function such as OPEN is held on, it will be up to local code in the Arduino to determine 
+ * when and how to turn it off. The host sends open and close requests but expects the roof to 
+ * brings its self to a stop when complete. 
+ * 
+ * If HOLD is 0 then the relay will be activated for RELAY_DELAY milliseconds, then released.
+ * If the relay is simulating a button push/release to the motor controller HOLD would be 0.
+*/
+#define FUNC_OPEN_HOLD 0
+#define FUNC_CLOSE_HOLD 0
+#define FUNC_ABORT_HOLD 0
+#define FUNC_AUX_HOLD 1
+
+#define RELAY_PRIOR_DELAY 50
+#define RELAY_ON_DELAY 500
+#define RELAY_POST_DELAY 50
+
+/*
+ * Abort (stop) request is only meaningful if roof is in motion.
+ *
+ * On Abort for the Aleko AR1450, we only want to activate relay and pulse the controller if
+ * the roof is still moving, then it would stop. If it has already reached the end of its
+ * travel, a pulse would set it off again in the opposite direction.
+ *
+ * In case the end of run switches are not reached, some way to know if it is moving
+ * would be helpful. Short of that estimate how long it takes the roof to open or close
+ */
+#define ROOF_OPEN_MILLI 12000       
+
+ // Buffer sizes
+#define MINRESPONSE 8
+#define MAXRESPONSE 127
+#define MAXERROR 80
+#define MAXCOMMAND 45
+
+unsigned long timeMove = 0;
+const int cLen = 15;
+const int tLen = 15;
+const int vLen = 15;
+char command[cLen+1];
+char target[tLen+1];
+char value[vLen+1];
+
+const char* ERROR1 = "The controller response message was too long";
+const char* ERROR2 = "The controller failure message was too long";
+const char* ERROR3 = "Command input request is too long";
+const char* ERROR4 = "Invalid command syntax, both start and end tokens missing"; 
+const char* ERROR5 = "Invalid command syntax, no start token found";
+const char* ERROR6 = "Invalid command syntax, no end token found";
+const char* ERROR7 = "Roof controller unable to parse command";
+const char* ERROR8 = "Command must map to either set a relay or get a switch";
+const char* ERROR9 = "Request not implemented in controller";
+const char* ERROR10 = "Abort command ignored, roof already stationary";
+
+void sendAck(char* val)
+{
+  char response [64];
+  if (strlen(val) > vLen)
+    sendNak(ERROR1);
+  else
+  {  
+    strcpy(response, "(ACK:");
+    strcat(response, target);
+    strcat(response, ":");
+    strcat(response, val);
+    strcat(response, ")");
+    SerialUSB.println(response);
+    SerialUSB.flush();
+  }
+}
+
+void sendNak(const char* errorMsg)
+{
+  char buffer[128];
+  if (strlen(errorMsg) > MAXERROR)
+    sendNak(ERROR2);
+  else
+  {
+    strcpy(buffer, "(NAK:ERROR:");
+    strcat(buffer, value);
+    strcat(buffer, ":");
+    strcat(buffer, errorMsg);
+    strcat(buffer, ")");
+    SerialUSB.println(buffer);
+    SerialUSB.flush();
+  }
+}
+
+/*
+ * Using a SainSmart 4 channel, 5V relay module. The relay module's JD-VCC jumper is removed. A separate 5V supply 
+ * powers the relay module using the GND and JD-VCC pins where the jumper was removed. The Arduino is powered from 
+ * the USB connection. Also no common ground between the Arduino and the relay module so pull the ground connector. 
+ * No external pullup resistor is used on the Arduino's output pin. The relay output uses the NO and common connectors. 
+ * The relay requires a LOW on the signal pin to activate, This is provided when a ON command is received. Default input 
+ * HIGH = inactive relay, open contact.
+ * 
+ * hold 1 indicates to hold relay closed until a relay OFF is received.
+ * hold 0 indicates a momentary close is wanted
+ */ 
+void setRelay(int id, int hold, char* value)
+{
+  if (strcmp(value, "ON") == 0)
+  {
+    digitalWrite(id, HIGH);           // Should already be in this condition
+    delay(RELAY_PRIOR_DELAY);
+    digitalWrite(id, LOW);
+    if (hold == 0)
+    {  
+      delay(RELAY_ON_DELAY);
+      digitalWrite(id, HIGH);
+    }
+  }
+  else
+  {
+    digitalWrite(id, HIGH);
+  }
+  delay(RELAY_POST_DELAY);
+} 
+
+/*
+ * Get switch value
+ * Expect a NO switch configured with a pull down resistor.
+ * NO switch: Inactive 0V input to the pin with to pull down resistor, logical 0 input. 
+ * When switch closes The positve voltage logical 1 is applied to the input pin. 
+ * The off or on value is to be sent to the host in the ACK response
+ */
+void getSwitch(int id, char* value)
+{
+  if (digitalRead(id) == LOW)
+    strcpy(value, "OFF");
+  else
+    strcpy(value, "ON");  
+}
+
+bool parseCommand()           // (command:target:value)
+{
+  bool start = false;
+  bool eof = false;
+  int recv_count = 0;
+  int wait = 0;
+  int offset = 0;
+  char startToken = '(';
+  char endToken = ')';
+  const int bLen = 127;
+  char inpBuf[bLen+1];
+
+  memset(inpBuf, 0, sizeof(inpBuf));
+  memset(command, 0, sizeof(command));
+  memset(target, 0, sizeof(target));
+  memset(value, 0, sizeof(value));
+    
+  while (!eof && (wait < 20))
+  {
+    if (SerialUSB.available() > 0)
+    {
+      SerialUSB.setTimeout(1000);
+      recv_count = SerialUSB.readBytes((inpBuf + offset), 1);
+      if (recv_count == 1)
+      {
+        offset++;
+        if (offset >= MAXCOMMAND)
+        {
+          sendNak(ERROR3);
+          return false;        
+        }
+        if (inpBuf[offset-1] == startToken)
+        {
+          start = true;  
+        }
+        if (inpBuf[offset-1] == endToken) 
+        {
+          eof = true;
+          inpBuf[offset] = '\0';           
+        }
+        continue;
+      }
+    }
+    wait++;
+    delay(100);
+  }
+    
+  if (!start || !eof)
+  {
+    if (!start && !eof)  
+      sendNak(ERROR4);
+    else if (!start)
+      sendNak(ERROR5);
+    else if (!eof)
+      sendNak(ERROR6);
+    return false;
+   }
+   else
+   {
+     strcpy(command, strtok(inpBuf,"(:"));
+     strcpy(target, strtok(NULL,":"));
+     strcpy(value, strtok(NULL,")"));
+     if ((strlen(command) >= 3) && (strlen(target) >= 1) && (strlen(value) >= 1))
+     {
+       return true;
+     }
+     else
+     {  
+       sendNak(ERROR7); 
+       return false;
+     }
+   }              
+}
+
+void readUSB()
+{
+  // Confirm there is input available, read and parse it.
+  if (SerialUSB && (SerialUSB.available() > 0))
+  {
+    if (parseCommand())
+    {
+      unsigned int timeNow = millis();
+      int hold = 0;
+      int relay = -1;   // -1 = not found, 0 = not implemented, pin number = supported
+      int sw = -1;      //      "                 "                    "
+      bool connecting = false;
+      const char* error = ERROR8;
+
+      if (strcmp(command, "CON") == 0)
+      {
+        connecting = true; 
+        sendAck(value);
+      }
+
+      // Map the general input command term to the local action
+      // SET: OPEN, CLOSE, ABORT, AUXSET
+      else if (strcmp(command, "SET") == 0)
+      {
+        if (strcmp(target, "OPEN") == 0)
+        {
+          relay = FUNC_OPEN;
+          hold = FUNC_OPEN_HOLD;
+          timeMove = timeNow;
+        }
+        else if (strcmp(target, "CLOSE") == 0)    
+        { 
+          relay = FUNC_CLOSE;
+          hold = FUNC_CLOSE_HOLD;
+          timeMove = timeNow;
+        }
+        else if (strcmp(target, "ABORT") == 0)
+        {          
+          // If the roof is neither opened or closed, see how long since movement was initiated.
+          // If longer than ROOF_OPEN_MILLI assume it is already stationary and ignore the abort command.                 
+          if ((digitalRead(STATE_OPENED) == LOW) && (digitalRead(STATE_CLOSED) == LOW) && 
+              ((timeNow - timeMove) >= ROOF_OPEN_MILLI))
+          {           
+            error = ERROR10;
+          }
+          else
+          {             
+            relay = FUNC_ABORT;
+            hold = FUNC_ABORT_HOLD;
+          }
+        }
+        else if (strcmp(target, "AUXSET") == 0)
+        { 
+          relay = FUNC_AUX;
+          hold = FUNC_AUX_HOLD;
+        }
+      }
+
+      // Handle requests to obtain the status of switches   
+      // GET: OPENED, CLOSED, LOCKED, AUXSTATE
+      else if (strcmp(command, "GET") == 0)
+      {
+        if (strcmp(target, "OPENED") == 0)
+          sw = STATE_OPENED;
+        else if (strcmp(target, "CLOSED") == 0) 
+          sw = STATE_CLOSED;
+        else if (strcmp(target, "LOCKED") == 0) 
+          sw = STATE_LOCKED;
+        else if (strcmp(target, "AUXSTATE") == 0) 
+          sw = STATE_AUX;
+      }
+    
+      /*
+       * Sem if there is a valid command
+       */
+      if (!connecting)
+      {
+        if ((relay == -1) && (sw == -1))
+        {
+          sendNak(error);                // Unknown input request or Abort rejection
+        }
+        else if ((relay == 0 || relay == -1) && (sw == 0 || sw == -1))
+        {
+          strcpy(value, "OFF");
+          sendAck(value);                // No point complaining
+//          sendNak(ERROR9);             // Request Not implemented
+        }
+        else if (relay >= 0)            // Set Relay response
+        {
+          setRelay(relay, hold, value);
+          sendAck(value);
+        }
+        
+        else if (sw >= 0)               // Get switch response
+        {
+          getSwitch(sw, value);
+          sendAck(value);
+        }
+      } // end !connecting
+    }   // end command parsed
+  }     // end SerialUSB input found  
+}
+
+void setup() 
+{
+  // Initialize the input switches
+  pinMode(SWITCH_1, INPUT); 
+  pinMode(SWITCH_2, INPUT); 
+  pinMode(SWITCH_3, INPUT); 
+  pinMode(SWITCH_4, INPUT);
+
+  // Initialize the relays
+  //Pin Setups
+  pinMode(RELAY_1, OUTPUT);
+  pinMode(RELAY_2, OUTPUT);
+  pinMode(RELAY_3, OUTPUT);
+  pinMode(RELAY_4, OUTPUT); 
+
+  //Turn Off the relays.
+  digitalWrite(RELAY_1, HIGH);
+  digitalWrite(RELAY_2, HIGH);
+  digitalWrite(RELAY_3, HIGH);
+  digitalWrite(RELAY_4, HIGH);
+
+// Serial.begin(9600);
+
+   // Establish Programmer's USB port and wait for it to open
+  SerialUSB.begin(BAUD_RATE);    // Baud rate to match that in the driver
+  while (!SerialUSB) 
+  {
+    delay(1000);       // wait for serial port to be established
+  }
+}
+
+void loop() 
+{   
+  // While there is still a SerialUSB wait for input from the host
+  while (SerialUSB && (SerialUSB.available() <= 0)) 
+  {
+    for (int cnt=0; cnt < 60; cnt++)
+    {
+      if (SerialUSB.available() > 0)
+        break;
+      else
+        delay(250);
+    }
+  }
+  readUSB();
+}       // end loop
+
+
+  

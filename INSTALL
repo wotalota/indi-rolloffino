@@ -1,0 +1,16 @@
+If you do not have the indilib development environment installed, see script build.sh
+If it is already installed create within it a indi-3rdparty/indi-rolloffino directory
+Copy the rolloffino files there.
+create a build directory outside the the indi source tree and set default there.
+Run cmake pointing to the source files
+For example, copied from the build.sh file without the git clone:
+
+$SRCDIR the directory containing the rolloffino files
+$PROJDIR the directory immediately above the indilib indi tree directory
+
+cp -p $SRCDIR/* $PROJDIR/indi/indi-3rdparty/indi-rolloffino
+mkdir -p $PROJDIR/build/indi-3rdparty/indi-rolloffino
+cd $PROJDIR/build/indi-3rdparty/indi-rolloffino
+cmake -DCMAKE_INSTALL_PREFIX=/usr $PROJDIR/indi/indi-3rdparty/indi-rolloffino
+sudo make install
+

@@ -1,0 +1,403 @@
+/*Program to open the roof of my Observatory.
+With 2 buttons Open,Close and an Emergency Stop.
+With realy supply power
+There are also 2 limit switches and a control as the telescope and of course the park position.*/
+
+/*********************************/
+#define BAUD_RATE 38400
+
+#define MINRESPONSE 8
+#define MAXRESPONSE 127
+#define MAXERROR 80
+#define MAXCOMMAND  45 
+/*********************************/
+
+const int ledRepos = 3;         // LedWaiting                  output
+const int RelaisOuverture1 = 4; // Open relay1                 output
+const int RelaisOuverture2 = 5; // Open relay2                 output
+const int RelaisFermeture1 = 6; // Close relay1                output
+const int RelaisFermeture2 = 7; // Close relay2                output
+const int RelaisAlimentation =8;// Power supply relay          output
+const int BoutonOpen = A0;      // Open button                 input
+const int BoutonClose = A1;     // Close button                input
+const int BoutonStop = A2;      // Stop button                 input
+const int FinOuverture = 12;    // limit switche Open          input
+const int FinFermeture = 10;    // limit switche Close         input
+const int Telescope_Parc =2;    // park position switche       input
+const int BoutonRelais   =A3;   // Power supply control 
+
+  
+int BoutonOpenState = 0;
+int BoutonCloseState = 0;
+int FinOuvertureState = LOW;
+int FinFermetureState = LOW;
+int Telescope_ParcState = LOW;
+int BoutonStopState = 0;
+
+bool BoutonRelaisState   = HIGH;    // Changed
+
+//les états possible
+
+enum {Repos, Ouverture, Ouvert, Fermeture, Fermer};  // At Rest, Opening. Open, Closing, Closed 
+int etat = Repos;
+
+bool estAlimente = false; 
+
+/*********************************/
+const int cLen = 15;
+const int tLen = 15;
+const int vLen = 15;
+char command[cLen+1];
+char target[tLen+1];
+char value[vLen+1];
+bool remotePowerRequest = false;
+
+const char* ERROR1 = "The controller response message was too long";
+const char* ERROR2 = "The controller failure message was too long";
+const char* ERROR3 = "Command input request is too long";
+const char* ERROR4 = "Invalid command syntax, both start and end tokens missing"; 
+const char* ERROR5 = "Invalid command syntax, no start token found";
+const char* ERROR6 = "Invalid command syntax, no end token found";
+const char* ERROR7 = "Roof controller unable to parse command";
+const char* ERROR8 = "Command must map to either set a relay or get a switch";
+const char* ERROR9 = "Request not implemented in controller";
+const char* ERROR10 = "Abort command ignored, roof already stationary";
+
+void sendAck(char* val)
+{
+  char response [64];
+  if (strlen(val) > vLen)
+    sendNak(ERROR1);
+  else
+  {  
+    strcpy(response, "(ACK:");
+    strcat(response, target);
+    strcat(response, ":");
+    strcat(response, val);
+    strcat(response, ")");
+    Serial.println(response);
+    Serial.flush();
+  }
+}
+
+void sendNak(const char* errorMsg)
+{
+  char buffer[128];
+  if (strlen(errorMsg) > MAXERROR)
+    sendNak(ERROR2);
+  else
+  {
+    strcpy(buffer, "(NAK:ERROR:");
+    strcat(buffer, value);
+    strcat(buffer, ":");
+    strcat(buffer, errorMsg);
+    strcat(buffer, ")");
+    Serial.println(buffer);
+    Serial.flush();
+  }
+}
+
+bool parseCommand()           // (command:target:value)
+{
+    bool start = false;
+    bool eof = false;
+    int recv_count = 0;
+    int wait = 0;
+    int offset = 0;
+    char startToken = '(';
+    char endToken = ')';
+    const int bLen = 127;
+    char inpBuf[bLen+1];
+
+    memset(inpBuf, 0, sizeof(inpBuf));
+    memset(command, 0, sizeof(command));
+    memset(target, 0, sizeof(target));
+    memset(value, 0, sizeof(value));
+    
+    while (!eof && (wait < 20))
+    {
+      if (Serial.available() > 0)
+      {
+        Serial.setTimeout(1000);
+        recv_count = Serial.readBytes((inpBuf + offset), 1);
+        if (recv_count == 1)
+        {
+          offset++;
+          if (offset >= MAXCOMMAND)
+          {
+            sendNak(ERROR3);
+            return false;        
+          }
+          if (inpBuf[offset-1] == startToken)
+          {
+            start = true;  
+          }
+          if (inpBuf[offset-1] == endToken) 
+          {
+            eof = true;
+            inpBuf[offset] = '\0';           
+          }
+          continue;
+        }
+      }
+      wait++;
+      delay(100);
+    }
+    
+    if (!start || !eof)
+    {
+      if (!start && !eof)  
+        sendNak(ERROR4);
+      else if (!start)
+        sendNak(ERROR5);
+      else if (!eof)
+        sendNak(ERROR6);
+      return false;
+    }
+    else
+    {
+      strcpy(command, strtok(inpBuf,"(:"));
+      strcpy(target, strtok(NULL,":"));
+      strcpy(value, strtok(NULL,")"));
+      if ((strlen(command) >= 3) && (strlen(target) >= 1) && (strlen(value) >= 1))
+      {
+        return true;
+      }
+      else
+      {  
+        sendNak(ERROR7); 
+        return false;
+      }
+    }              
+}
+
+void readUSB()
+{  
+  // See if there is input available from host, read and parse it.
+  if (Serial && (Serial.available() > 0))
+  {
+    if (parseCommand())
+    {
+      bool connecting = false;
+      bool found = true;
+ 
+      if (strcmp(command, "CON") == 0)
+      {
+        connecting = true; 
+        sendAck(value);
+      }
+
+      // Map the general input command term to the local action to be taken
+      // SET: OPEN, CLOSE, ABORT, AUXSET
+      else if (strcmp(command, "SET") == 0)
+      {
+        if (strcmp(target, "OPEN") == 0)            // BoutonOpenState
+        {
+          BoutonOpenState = LOW;
+        }
+        else if (strcmp(target, "CLOSE") == 0)      // BoutonCloseState
+        { 
+          BoutonCloseState = LOW;
+        }
+        else if (strcmp(target, "ABORT") == 0)      // BoutonStopState
+        { 
+          BoutonStopState = LOW;
+        }
+        else if (strcmp(target, "AUXSET") == 0)      // Relais Alimentation
+        {
+          if (strcmp(value, "ON") == 0) 
+          {
+            if (!estAlimente)
+              remotePowerRequest = true;                 
+          }
+          else
+          {
+            if (estAlimente)
+              remotePowerRequest = true;                 
+          }
+        }
+        else
+        { 
+          found = false;
+        }
+      }
+      else
+      {
+        // Handle requests to obtain the status of switches   
+        // GET: OPENED, CLOSED, LOCKED, AUXSTATE
+        strcpy(value, "OFF");    
+        
+        if (strcmp(command, "GET") == 0)
+        {
+          if (strcmp(target, "OPENED") == 0)          // FinOuvertureState
+          {
+            if (FinOuvertureState == LOW)
+            strcpy(value, "ON");
+          }
+          else if (strcmp(target, "CLOSED") == 0)     // FinFermetureState
+          {
+            if (FinFermetureState == LOW)
+            strcpy(value, "ON");
+          }
+          else if (strcmp(target, "LOCKED") == 0)     // Telescope_ParcState
+          {
+            if (Telescope_ParcState == HIGH || !estAlimente)   // Unsafe telescope or power off, either could indicate a lock preventing open/close commands
+            strcpy(value, "ON");
+          }
+          else if (strcmp(target, "AUXSTATE") == 0)   // Relais Alimentation
+          {  
+            if (estAlimente)                          
+              strcpy(value, "ON");
+          }
+          else
+          {
+            found = false;
+          }
+        }
+      }
+
+      /*
+       * See if the command was recognized
+       */
+      if (!connecting && !found)
+      {
+        sendNak(ERROR8);
+      }
+      else
+      {
+        sendAck(value);
+      }  
+    }   // end if parseCommand
+  }     // end look for Serial
+}
+
+/*********************************/
+
+// le N° des connection et fonction
+
+void setup() {
+  pinMode(ledRepos, OUTPUT);
+  pinMode(RelaisOuverture1, OUTPUT);
+  pinMode(RelaisOuverture2, OUTPUT);
+  pinMode(RelaisFermeture1, OUTPUT);
+  pinMode(RelaisFermeture2, OUTPUT);
+  pinMode(RelaisAlimentation, OUTPUT);
+  
+  pinMode(BoutonOpen, INPUT_PULLUP);
+  pinMode(BoutonClose, INPUT_PULLUP);
+  pinMode(BoutonStop, INPUT_PULLUP);
+  pinMode(FinOuverture, INPUT_PULLUP);
+  pinMode(FinFermeture, INPUT_PULLUP);
+  pinMode(Telescope_Parc, INPUT_PULLUP);
+  pinMode(BoutonRelais, INPUT_PULLUP); // *****new
+  
+  Serial.begin(BAUD_RATE);          // Establish serial port. Baud rate to match that in the driver     
+}
+
+// fin setup
+
+void position_toit () {       // début des statuts pour le loop
+  switch (etat)  {           // début du switch avec les possibilté
+    case Repos:                                                                 // At Rest
+      digitalWrite(ledRepos, HIGH);  //  LedWaiting
+      digitalWrite(RelaisOuverture1, LOW);
+      digitalWrite(RelaisOuverture2, LOW);
+      digitalWrite(RelaisFermeture1, LOW);
+      digitalWrite(RelaisFermeture2, LOW);
+     if (BoutonOpenState == LOW && Telescope_ParcState == LOW ) {
+      etat = Ouverture;
+        delay(30);
+      }
+    else if(BoutonCloseState == LOW && FinFermetureState == HIGH ){
+      etat = Fermeture;
+      delay(30);
+    }
+      break;
+    case Ouverture:                                                             // Opening
+      digitalWrite(ledRepos, LOW);  //  LedWaiting
+      digitalWrite(RelaisOuverture1, HIGH);
+      digitalWrite(RelaisOuverture2, HIGH);
+      digitalWrite(RelaisFermeture1, LOW);
+      digitalWrite(RelaisFermeture2, LOW);
+      if (FinOuvertureState == LOW) {
+        etat = Ouvert;
+        delay(30);
+      }
+    else if(Telescope_ParcState == HIGH || BoutonStopState == LOW) {
+      etat = Repos;
+      delay(30);
+    }
+      break;
+    case Ouvert:                                                                // Open
+      digitalWrite(ledRepos, HIGH);  //  LedWaiting
+      digitalWrite(RelaisOuverture1, LOW);
+      digitalWrite(RelaisOuverture2, LOW);
+      digitalWrite(RelaisFermeture1, LOW);
+      digitalWrite(RelaisFermeture2, LOW);
+      if (BoutonCloseState == LOW && Telescope_ParcState == LOW ) {
+        etat = Fermeture;
+        delay(30);
+      }
+      break;
+    case Fermeture:                                                             // Closing
+      digitalWrite(ledRepos, LOW);  //  LedWaiting
+      digitalWrite(RelaisOuverture1, LOW);
+      digitalWrite(RelaisOuverture2, LOW);
+      digitalWrite(RelaisFermeture1, HIGH);
+      digitalWrite(RelaisFermeture2, HIGH);
+      if (FinFermetureState == LOW) {
+        etat = Fermer;
+        delay(30);
+      }
+      else if(Telescope_ParcState == HIGH || BoutonStopState == LOW) {
+      etat = Repos;
+      delay(30);  
+        
+      }
+     break;
+   case Fermer:                                                                 // Closed
+      digitalWrite(ledRepos, LOW);  //  LedWaiting
+      digitalWrite(RelaisOuverture1, LOW);
+      digitalWrite(RelaisOuverture2, LOW);
+      digitalWrite(RelaisFermeture1, LOW);
+      digitalWrite(RelaisFermeture2, LOW);
+      etat = Repos;
+        break;
+  } //fin switch
+
+}// fin void
+
+void loop() 
+{
+  // Handle any change request to power state
+  BoutonRelaisState = digitalRead (BoutonRelais);
+  if (BoutonRelaisState == HIGH && !estAlimente)  // if power is off & button not pressed check for remote power on. power off caught below
+    readUSB();                                    // When power is on the readUSB below will catch any remote power request      
+  if (BoutonRelaisState == LOW || remotePowerRequest) {  // If either local or remote power request, change the relay state
+    remotePowerRequest= false;
+    estAlimente = !estAlimente;                         
+    if (estAlimente)
+      digitalWrite (RelaisAlimentation, HIGH);     // Power on
+    else
+      digitalWrite (RelaisAlimentation, LOW);      // Power off
+    delay (250);
+  }
+
+  // début du programme des fonctions
+  if (estAlimente) {    
+    BoutonOpenState = digitalRead (BoutonOpen) ;
+    BoutonCloseState = digitalRead (BoutonClose) ;
+    FinOuvertureState = digitalRead (FinOuverture) ; 
+    FinFermetureState = digitalRead (FinFermeture) ;
+    Telescope_ParcState = digitalRead (Telescope_Parc);
+    BoutonStopState = digitalRead (BoutonStop);
+    readUSB();
+    position_toit() ;
+    }
+                                                        
+  delay(250);                                      // 0.25 second loop
+  
+}// fin loop ou programme
+
+
+  
