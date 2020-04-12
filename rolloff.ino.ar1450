@@ -92,7 +92,7 @@
 unsigned long timeMove = 0;
 const int cLen = 15;
 const int tLen = 15;
-const int vLen = 127;
+const int vLen = 15;
 char command[cLen+1];
 char target[tLen+1];
 char value[vLen+1];
@@ -269,16 +269,23 @@ void readUSB()
   {
     if (parseCommand())
     {
-      unsigned int timeNow = millis();
+      unsigned long timeNow = millis();
       int hold = 0;
       int relay = -1;   // -1 = not found, 0 = not implemented, pin number = supported
       int sw = -1;      //      "                 "                    "
       bool connecting = false;
       const char* error = ERROR8;
 
+ //     Serial.print(command);
+ //     Serial.print(":");
+ //     Serial.print(target);
+ //     Serial.print(":");
+ //     Serial.println(value);
+
       if (strcmp(command, "CON") == 0)
       {
         connecting = true; 
+        strcpy(value, "V1.1-0");  // Can be seen on host in debug message to confirm what is running       
         sendAck(value);
       }
 
@@ -386,7 +393,7 @@ void setup()
   digitalWrite(RELAY_3, HIGH);
   digitalWrite(RELAY_4, HIGH);
 
-// Serial.begin(9600);
+//  Serial.begin(9600);
 
    // Establish Programmer's USB port and wait for it to open
   SerialUSB.begin(BAUD_RATE);    // Baud rate to match that in the driver

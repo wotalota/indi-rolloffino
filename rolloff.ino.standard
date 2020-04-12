@@ -12,6 +12,7 @@
 /*
  * This version of the rolloff.ino is a generic example, intended as a starting place.
  *
+ * Review additions to the other Arduino samples to see if they are a more appropriate base.
  * If not using an Arduino Due, change SerialUSB() calls to Serial(). 
  * If using Arduino Due or perhaps others with similar 2 USB ports. Connect to INDI host via Programming Port. 
  * Under Tools both Board and Port should select Programmers Port. Use SerialUSB() to communicate with host.
@@ -89,7 +90,7 @@
 unsigned long timeMove = 0;
 const int cLen = 15;
 const int tLen = 15;
-const int vLen = 127;
+const int vLen = 15;
 char command[cLen+1];
 char target[tLen+1];
 char value[vLen+1];
