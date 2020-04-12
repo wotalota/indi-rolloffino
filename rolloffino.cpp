@@ -158,15 +158,15 @@ bool RollOffIno::initProperties()
     IUFillSwitch(&AuxS[AUX_ENABLE], "AUX_ENABLE", "On", ISS_OFF);
     IUFillSwitchVector(&AuxSP, AuxS, 2, getDeviceName(), "AUX", "Auxiliary", MAIN_CONTROL_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
-    IUFillLight(&RoofStatusL[ROOF_STATUS_OPENED], "Opened", "", IPS_IDLE);
-    IUFillLight(&RoofStatusL[ROOF_STATUS_CLOSED], "Closed", "", IPS_IDLE);
-    IUFillLight(&RoofStatusL[ROOF_STATUS_MOVING], "Moving", "", IPS_IDLE);
-    IUFillLight(&RoofStatusL[ROOF_STATUS_LOCKED], "Roof Lock", "", IPS_IDLE);
-    IUFillLight(&RoofStatusL[ROOF_STATUS_AUXSTATE], "Roof Auxiliary", "", IPS_IDLE);
-    IUFillLightVector(&RoofStatusLP, RoofStatusL, 5, getDeviceName(), "Roof Status", "", MAIN_CONTROL_TAB, IPS_BUSY);
+    IUFillLight(&RoofStatusL[ROOF_STATUS_OPENED], "ROOF_OPENED", "Opened", IPS_IDLE);
+    IUFillLight(&RoofStatusL[ROOF_STATUS_CLOSED], "ROOF_CLOSED", "Closed", IPS_IDLE);
+    IUFillLight(&RoofStatusL[ROOF_STATUS_MOVING], "ROOF_MOVING", "Moving", IPS_IDLE);
+    IUFillLight(&RoofStatusL[ROOF_STATUS_LOCKED], "ROOF_LOCK", "Roof Lock", IPS_IDLE);
+    IUFillLight(&RoofStatusL[ROOF_STATUS_AUXSTATE], "ROOF_AUXILIARY", "Roof Auxiliary", IPS_IDLE);
+    IUFillLightVector(&RoofStatusLP, RoofStatusL, 5, getDeviceName(), "ROOF STATUS", "Roof Status", MAIN_CONTROL_TAB, IPS_BUSY);
 
     IUFillNumber(&RoofTimeoutN[0], "ROOF_TIMEOUT", "Timeout in Seconds", "%3.0f", 1, 300, 1, 15);
-    IUFillNumberVector(&RoofTimeoutNP, RoofTimeoutN, 1, getDeviceName(), "ROOF_TIMEOUT", "Roof Movement", OPTIONS_TAB, IP_RW,
+    IUFillNumberVector(&RoofTimeoutNP, RoofTimeoutN, 1, getDeviceName(), "ROOF_MOVEMENT", "Roof Movement", OPTIONS_TAB, IP_RW,
                        60, IPS_IDLE);
 
     SetParkDataType(PARK_NONE);
@@ -224,8 +224,8 @@ bool RollOffIno::updateProperties()
     INDI::Dome::updateProperties();
     if (isConnected())
     {
-        defineLight(&RoofStatusLP);    // All the roof status lights
         defineSwitch(&AuxSP);          // Aux Switch,
+        defineLight(&RoofStatusLP);    // All the roof status lights
         defineNumber(&RoofTimeoutNP);
         setupConditions();
     }
@@ -989,6 +989,7 @@ bool RollOffIno::pushRoofButton(const char* button, bool switchOn, bool ignoreLo
     char writeBuffer[MAXINOBUF];
     bool status;
     bool switchState = false;
+    bool responseState = false;  //true if the value in response to command was "ON"
 
     if (!contactEstablished)
     {
@@ -1010,7 +1011,10 @@ bool RollOffIno::pushRoofButton(const char* button, bool switchOn, bool ignoreLo
             return false;
         msSleep(ROR_D_PRESS);
         memset(readBuffer, 0, sizeof(readBuffer));
-        return readIno(readBuffer);
+
+        status = readIno(readBuffer);
+        evaluateResponse(readBuffer, &responseState); // To get a log of what was returned in response to the command
+        return status;                                // Did the read itself successfully connect
     }
     else
     {
