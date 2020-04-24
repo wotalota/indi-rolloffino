@@ -55,7 +55,7 @@ Value:   ON | OFF | 0 | text-message
                  Driver                     Arduino
                  ------                     -------
                  (CON:0:0)            >                       
-                                      <     (ACK:0:0) | (NAK:ERROR:message)
+                                      <     (ACK:0:0) | (ACK:0:version) | (NAK:ERROR:message)
                  
 Read switch      (GET:state:0)        >      
                                       <     (ACK:state:ON|OFF) | (NAK:ERROR:message)

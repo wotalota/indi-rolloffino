@@ -1,16 +1,19 @@
-If you do not have the indilib development environment installed, see script build.sh
-If it is already installed create within it a indi-3rdparty/indi-rolloffino directory
-Copy the rolloffino files there.
-create a build directory outside the the indi source tree and set default there.
-Run cmake pointing to the source files
-For example, copied from the build.sh file without the git clone:
+If you have not previously cloned the INDI 3rdparty sources for directions refer to section 3 in
+https://indilib.org/forum/general/210-howto-building-latest-libindi-ekos.html.
+This also specifies the apt packages that might be needed to build.
 
-$SRCDIR the directory containing the rolloffino files
-$PROJDIR the directory immediately above the indilib indi tree directory
+After completing the clone command to fetch the 3rdpary sources.
+Using the example in the directions of ~/Project as the base:
 
-cp -p $SRCDIR/* $PROJDIR/indi/indi-3rdparty/indi-rolloffino
-mkdir -p $PROJDIR/build/indi-3rdparty/indi-rolloffino
-cd $PROJDIR/build/indi-3rdparty/indi-rolloffino
-cmake -DCMAKE_INSTALL_PREFIX=/usr $PROJDIR/indi/indi-3rdparty/indi-rolloffino
-sudo make install
+$ cd ~/Project/indi-3rdparty
+$ mkdir indi-rolloffino
+
+Copy the rolloffino files into ~/Project/indi-3rdparty/indi-rolloffino
+
+$ mkdir ~/Project/indi-3rdparty/indi-rolloffino/build
+$ cd ~/Project/indi-3rdparty/indi-rolloffino/build
+$ cmake -DCMAKE_INSTALL_PREFIX=/usr ../
+$ make 
+$ sudo cp rolloffino /usr/bin/
+
 

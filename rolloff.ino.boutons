@@ -55,7 +55,7 @@ bool estAlimente = false;
 /*********************************/
 const int cLen = 15;
 const int tLen = 15;
-const int vLen = 15;
+const int vLen = 127;
 char command[cLen + 1];
 char target[tLen + 1];
 char value[vLen + 1];
