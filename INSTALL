@@ -3,17 +3,17 @@ https://indilib.org/forum/general/210-howto-building-latest-libindi-ekos.html.
 This also specifies the apt packages that might be needed to build.
 
 After completing the clone command to fetch the 3rdpary sources.
-Using the example in the directions of ~/Project as the base:
+Using the example of ~/Project as the work area in the above directions:
 
 $ cd ~/Project/indi-3rdparty
 $ mkdir indi-rolloffino
 
-Copy the rolloffino files into ~/Project/indi-3rdparty/indi-rolloffino
+Place the rolloffino files into ~/Project/indi-3rdparty/indi-rolloffino
 
 $ mkdir ~/Project/indi-3rdparty/indi-rolloffino/build
 $ cd ~/Project/indi-3rdparty/indi-rolloffino/build
 $ cmake -DCMAKE_INSTALL_PREFIX=/usr ../
-$ make 
-$ sudo cp rolloffino /usr/bin/
+$ sudo make install 
+
 
 
