@@ -1,19 +1,16 @@
-If you have not previously cloned the INDI 3rdparty sources for directions refer to section 3 in
+To build the rolloffino roof driver, the INDI 3rdparty driver build files are needed. To obtain them see the directions in section 3 of the following web page, up to and including the git clone command.
+
 https://indilib.org/forum/general/210-howto-building-latest-libindi-ekos.html.
-This also specifies the apt packages that might be needed to build.
 
-After completing the clone command to fetch the 3rdpary sources.
-Using the example of ~/Project as the work area in the above directions:
+Following on from the example of using ~/Projects as the work area in the above directions.
 
-$ cd ~/Project/indi-3rdparty
-$ mkdir indi-rolloffino
+cd ~/Projects/indi-3rdparty
+git clone https://github.com/wotalota/indi-rolloffino.git
+mkdir indi-rolloffino/build
+cd indi-rolloffino/build
+cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug ../
+sudo make install 
 
-Place the rolloffino files into ~/Project/indi-3rdparty/indi-rolloffino
-
-$ mkdir ~/Project/indi-3rdparty/indi-rolloffino/build
-$ cd ~/Project/indi-3rdparty/indi-rolloffino/build
-$ cmake -DCMAKE_INSTALL_PREFIX=/usr ../
-$ sudo make install 
 
 
 
