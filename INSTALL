@@ -1,4 +1,5 @@
 To build the rolloffino roof driver, the INDI 3rdparty driver build files are needed. To obtain them see the directions in section 3 of the following web page, up to and including the git clone command.
+In addition to the libraries listed in section 3, install libindi-dev
 
 https://indilib.org/forum/general/210-howto-building-latest-libindi-ekos.html.
 
