@@ -618,11 +618,12 @@ IPState RollOffIno::Move(DomeDirection dir, DomeMotionCommand operation)
                 SetParked(false);
                 return IPS_ALERT;
             }
-            else if (getWeatherState() == IPS_ALERT)
-            {
-                LOG_WARN("Weather conditions are in the danger zone. Cannot open roof");
-                return IPS_ALERT;
-            }
+            // getWeatherState is no longer available
+            //else if (getWeatherState() == IPS_ALERT)
+            //{
+            //    LOG_WARN("Weather conditions are in the danger zone. Cannot open roof");
+            //    return IPS_ALERT;
+            //}
 
             // Initiate action
             if (roofOpen())
