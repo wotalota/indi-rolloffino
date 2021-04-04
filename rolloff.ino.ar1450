@@ -83,20 +83,20 @@
  */
 #define ROOF_OPEN_MILLI 12000       
 
- // Buffer sizes
-#define MINRESPONSE 8
-#define MAXRESPONSE 127
-#define MAXERROR 80
-#define MAXCOMMAND 45
+// Buffer limits
+#define MAX_INPUT 45
+#define MAX_RESPONSE 127
+#define MAX_MESSAGE 63
 
 unsigned long timeMove = 0;
 const int cLen = 15;
 const int tLen = 15;
-const int vLen = 127;
+const int vLen = MAX_RESPONSE;
 char command[cLen+1];
 char target[tLen+1];
 char value[vLen+1];
 
+//  Maximum length of messages = 63
 const char* ERROR1 = "The controller response message was too long";
 const char* ERROR2 = "The controller failure message was too long";
 const char* ERROR3 = "Command input request is too long";
@@ -108,10 +108,12 @@ const char* ERROR8 = "Command must map to either set a relay or get a switch";
 const char* ERROR9 = "Request not implemented in controller";
 const char* ERROR10 = "Abort command ignored, roof already stationary";
 
+const char* INFO_1 = "V1.1-1";
+
 void sendAck(char* val)
 {
-  char response [64];
-  if (strlen(val) > vLen)
+  char response [MAX_RESPONSE];
+  if (strlen(val) > MAX_MESSAGE)
     sendNak(ERROR1);
   else
   {  
@@ -127,8 +129,8 @@ void sendAck(char* val)
 
 void sendNak(const char* errorMsg)
 {
-  char buffer[128];
-  if (strlen(errorMsg) > MAXERROR)
+  char buffer[MAX_RESPONSE];
+  if (strlen(errorMsg) > MAX_MESSAGE)
     sendNak(ERROR2);
   else
   {
@@ -197,7 +199,7 @@ bool parseCommand()           // (command:target:value)
   int offset = 0;
   char startToken = '(';
   char endToken = ')';
-  const int bLen = 127;
+  const int bLen = MAX_INPUT;
   char inpBuf[bLen+1];
 
   memset(inpBuf, 0, sizeof(inpBuf));
@@ -214,7 +216,7 @@ bool parseCommand()           // (command:target:value)
       if (recv_count == 1)
       {
         offset++;
-        if (offset >= MAXCOMMAND)
+        if (offset >= MAX_INPUT)
         {
           sendNak(ERROR3);
           return false;        
@@ -285,7 +287,7 @@ void readUSB()
       if (strcmp(command, "CON") == 0)
       {
         connecting = true; 
-        strcpy(value, "V1.1-0");  // Can be seen on host in debug message to confirm what is running       
+        strcpy(value, INFO_1);  // Can be seen on host to confirm what is running       
         sendAck(value);
       }
 
