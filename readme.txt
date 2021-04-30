@@ -1,5 +1,6 @@
 INDI rolloff roof driver to communicate with an Arduino controller.
 -------------------------------------------------------------------
+
 Intended as a basis for a DIY home build project that uses a Arduino controller for roof movement.
 Provided in a form similar to a INDI third party driver along with some Arduino code examples. The driver is
 derived from the rolloff roof simulator. USB is the connection mechanism, it uses a default transmission rate of
