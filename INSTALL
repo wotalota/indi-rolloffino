@@ -1,9 +1,22 @@
-To build the rolloffino roof driver, the INDI 3rdparty driver build files are needed. To obtain them see the directions in section 3 of the following web page, up to and including the git clone command.
-In addition to the libraries listed in section 3, install libindi-dev
+Modified May 1, 2021 to account for changes to the referenced web page.
+
+To build the rolloffino roof driver, development libraries and
+3rdparty driver build files are needed. If you do not already have the
+current development files installed, see the directions in the web page below.
 
 https://indilib.org/forum/general/210-howto-building-latest-libindi-ekos.html.
+Section 1 Contains the normal INDI install directions.
+Section 2 Install the development libraries. You do not need to follow the 
+          build libindi unless you intend to run using your own INDI build.
+Section 3 Install the libraries and perform the git clone. No need to go
+          beyond the clone.
 
-Following on from the example of using ~/Projects as the work area in the above directions.
+In addition to the libraries already installed, install libindi-dev
+
+Now obtain the rolloffino driver and Arduino source file examples.
+
+Following on from the example of using ~/Projects as the work area in the
+above directions:
 
 cd ~/Projects/indi-3rdparty
 git clone https://github.com/wotalota/indi-rolloffino.git
@@ -12,6 +25,9 @@ cd indi-rolloffino/build
 cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug ../
 sudo make install 
 
+This will build and install the indi_rolloffino roof driver. It
+will then be available for selection in Ekos using the profile editor 
+in the Dome section.
 
 
 
