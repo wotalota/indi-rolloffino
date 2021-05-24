@@ -74,7 +74,7 @@ void RollOffIno::ISGetProperties(const char *dev)
     INDI::Dome::ISGetProperties(dev);
 
     // Load Sync position
-    defineNumber(&RoofTimeoutNP);
+    defineProperty(&RoofTimeoutNP);
     loadConfig(true, "ENCODER_TICKS");
 }
 
@@ -224,9 +224,9 @@ bool RollOffIno::updateProperties()
     INDI::Dome::updateProperties();
     if (isConnected())
     {
-        defineSwitch(&AuxSP);          // Aux Switch,
-        defineLight(&RoofStatusLP);    // All the roof status lights
-        defineNumber(&RoofTimeoutNP);
+        defineProperty(&AuxSP);          // Aux Switch,
+        defineProperty(&RoofStatusLP);    // All the roof status lights
+        defineProperty(&RoofTimeoutNP);
         setupConditions();
     }
     else
