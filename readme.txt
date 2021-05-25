@@ -6,9 +6,6 @@ Provided in a form similar to a INDI third party driver along with some Arduino 
 derived from the rolloff roof simulator. USB is the connection mechanism, it uses a default transmission rate of
 38400 baud defined in the Arduino code.
 
-<description of driver's tabs>
-
-
 The Arduino code is responsible for controlling the safe starting and stopping of roof movement. The Arduino receives
 Open and Close commands from the INDI driver. The driver expects in return a fully open or fully closed response.
 There are three examples of Arduino code matching the protocol used by the driver.
