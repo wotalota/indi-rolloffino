@@ -54,7 +54,7 @@ bool estAlimente = false;
 /*********************************/
 const int cLen = 15;
 const int tLen = 15;
-const int vLen = MAX_REPONSE;
+const int vLen = MAX_RESPONSE;
 char command[cLen + 1];
 char target[tLen + 1];
 char value[vLen + 1];
@@ -233,7 +233,6 @@ void readUSB()
         timerActive = true;  // Whether power turned on manually, from a prior session or auto, When connected timer will run
         connecting = true;
         strcpy(value, INFO_1); // To indicate the version of the Arduino code
-        sendAck(value);
       }
 
       // Map the general input command term to the local action to be taken
@@ -316,8 +315,12 @@ void readUSB()
           {
             found = false;
           }
+        } // End GET command
+        else
+        {
+            found = false;                             // Not a known command
         }
-      }
+      } // End looking for commands
 
       /*
          See if the command was recognized
@@ -332,7 +335,7 @@ void readUSB()
       }
       else
       {
-        sendAck(value);
+        sendAck(value);       // Found a CON, SET or GET
       }
     }   // end of parseCommand
   }     // end look for USB input
