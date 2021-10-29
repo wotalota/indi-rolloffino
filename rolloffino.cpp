@@ -303,11 +303,16 @@ bool RollOffIno::setupConditions()
 
     }
 
-     // If Dome:: park status different from roof status, just o/p message (the roof might be or need to be operating manually)
+     // If the roof is clearly fully opened or fully closed, set the Dome::IsParked status to match.
+     // Otherwise if Dome:: park status different from roof status, o/p message (the roof might be or need to be operating manually)
      // If park status is the same, and Dome:: state does not match, change the Dome:: state.
      if (isParked())
      {
-         if (fullyClosedLimitSwitch == ISS_OFF)
+         if (fullyOpenedLimitSwitch == ISS_ON)
+         {
+             SetParked(false);
+         }
+         else if (fullyClosedLimitSwitch == ISS_OFF)
          {
                 DEBUG(INDI::Logger::DBG_WARNING,"Dome indicates it is parked but roof closed switch not set, manual intervention needed");
          }
@@ -323,7 +328,11 @@ bool RollOffIno::setupConditions()
      }
      else
      {
-         if (fullyOpenedLimitSwitch == ISS_OFF)
+         if (fullyClosedLimitSwitch == ISS_ON)
+         {
+             SetParked(true);
+         }
+         else if (fullyOpenedLimitSwitch == ISS_OFF)
          {
              DEBUG(INDI::Logger::DBG_WARNING,"Dome indicates it is unparked but roof open switch is not set, manual intervention needed");
          }
