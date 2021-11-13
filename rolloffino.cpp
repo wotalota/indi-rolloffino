@@ -187,12 +187,12 @@ bool RollOffIno::Handshake()
     {
         if (!(status = initialContact()))
         {
-            msSleep(1000);              // In case it is a Nano that was still resetting
+            DEBUG(INDI::Logger::DBG_WARNING,"Initial controller contact failed, retrying");
+            msSleep(1000);              // In case it is a Arduino still resetting from upload
             status = initialContact();
         }
-
         if (!status)
-            DEBUG(INDI::Logger::DBG_WARNING,"Initial controller contact failed");
+            LOG_ERROR("Unable to contact the roof controller");
     }
     return status;
 }
@@ -302,6 +302,7 @@ bool RollOffIno::setupConditions()
             break;
 
     }
+
      // If the roof is clearly fully opened or fully closed, set the Dome::IsParked status to match.
      // Otherwise if Dome:: park status different from roof status, o/p message (the roof might be or need to be operating manually)
      // If park status is the same, and Dome:: state does not match, change the Dome:: state.
@@ -984,7 +985,6 @@ bool RollOffIno::initialContact(void)
             return contactEstablished;
         }
     }
-    LOG_ERROR("Unable to contact the roof controller");
     return false;
 }
 
@@ -1073,7 +1073,7 @@ bool RollOffIno::readIno(char* retBuf)
         if (status != TTY_OK)
         {
             tty_error_msg(status, errMsg, MAXINOERR);
-            LOGF_ERROR("roof control connection error: %s", errMsg);
+            LOGF_DEBUG("roof control connection error: %s", errMsg);
             return false;
         }
         if (retCount > 0)
@@ -1110,7 +1110,7 @@ bool RollOffIno::writeIno(const char* msg)
     if (status != TTY_OK)
     {
         tty_error_msg(status, errMsg, MAXINOERR);
-        LOGF_ERROR("roof control connection error: %s", errMsg);
+        LOGF_DEBUG("roof control connection error: %s", errMsg);
         return false;
     }
     return true;
