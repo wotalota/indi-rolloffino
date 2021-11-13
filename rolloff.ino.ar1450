@@ -7,20 +7,20 @@
  *                  Add unspecified usage AUX switch and relay
  *                  Communication protocol in terms of function not switches/relays
  *                  ~ 15KB 2% of Due, 50% of Nano
+ * tg November 2021 Break out commandReceived and requestReceived to make alernate actions more obvious/accessible
  */
 
 /*
  * This version of rolloff.ino is modified to work with an Aleko 1450 gate opener.
  * The Aleko controller includes a single push button motor control connection.
- *
- * If not using an Arduino Due, change SerialUSB() calls to Serial(). 
- * If using Arduino Due or perhaps others with similar 2 USB ports. Connect to INDI host via Programming Port. 
+ * 
+ * If using Arduino Due or perhaps others with 2 USB ports. Connect to INDI host via Programming Port. 
  * Under Tools both Board and Port should select Programmers Port. Use SerialUSB() to communicate with host.
  * If a second USB cable is connected to the Native port the monitor console can then be used for degug messages 
  * using Serial() connection. 
+ * If not using an Arduino Due, change SerialUSB() calls to Serial(). 
  *
- * The auxiliary button and light in the remote driver are of unspecified purpose. button could be used to set a relay, 
- * light can indicate the state of a switch. Intended to address request to be able to turn on and off power to a roof motor.
+ * The auxiliary button and light in the remote driver are of unspecified purpose. 
 */
 
 #define BAUD_RATE 38400
@@ -29,26 +29,26 @@
 #define SWITCH_1 31
 #define SWITCH_2 32
 #define SWITCH_3 33
-#define SWITCH_4 34
+#define SWITCH_4 34            
 
-#define RELAY_1 41
+#define RELAY_1 41             
 #define RELAY_2 42
 #define RELAY_3 43
 #define RELAY_4 44
 
 // Indirection to define a functional name in terms of a switch
 // Use 0 if switch not implemented
-#define STATE_OPENED SWITCH_1
-#define STATE_CLOSED SWITCH_2
-#define STATE_LOCKED SWITCH_3
-#define STATE_AUX    0
+#define STATE_OPENED SWITCH_1  // Fully opened is assigned to switch 1
+#define STATE_CLOSED SWITCH_2  // Fully closed is assigned to switch 2
+#define STATE_LOCKED SWITCH_3  // Indication of external lock is switch 3
+#define STATE_AUX    0         // Not being used
 
 // Indirection to define a functional name in terms of a relay
 // Use 0 if function not supported
 #define FUNC_OPEN RELAY_1
 #define FUNC_CLOSE RELAY_1    // For a single button controller might map this also to RELAY_1
 #define FUNC_ABORT RELAY_1    // For a single button controller might map this also to RELAY_1
-#define FUNC_AUX   0
+#define FUNC_AUX   0          // not being used, not implemented
 
 /*
  * For the relay that the function is mapped to indicate if that relay is to be momentarily closed 
@@ -81,7 +81,7 @@
  * In case the end of run switches are not reached, some way to know if it is moving
  * would be helpful. Short of that estimate how long it takes the roof to open or close
  */
-#define ROOF_OPEN_MILLI 12000       
+#define ROOF_OPEN_MILLI 15000       
 
 // Buffer limits
 #define MAX_INPUT 45
@@ -159,18 +159,18 @@ void setRelay(int id, int hold, char* value)
 {
   if (strcmp(value, "ON") == 0)
   {
-    digitalWrite(id, HIGH);           // Should already be in this condition
+    digitalWrite(id, HIGH);           // Would normally already be in this condition (openit)
     delay(RELAY_PRIOR_DELAY);
-    digitalWrite(id, LOW);
+    digitalWrite(id, LOW);            // Activate the relay (close it) 
     if (hold == 0)
     {  
       delay(RELAY_ON_DELAY);
-      digitalWrite(id, HIGH);
+      digitalWrite(id, HIGH);         // Turn relay off (open it)
     }
   }
   else
   {
-    digitalWrite(id, HIGH);
+    digitalWrite(id, HIGH);           // Turn relay off (open it) 
   }
   delay(RELAY_POST_DELAY);
 } 
@@ -264,6 +264,10 @@ bool parseCommand()           // (command:target:value)
    }              
 }
 
+// Use the parseCommand routine to decode message
+// Determine associated action in the message. Resolve the relay or switch associated pin with the target identity.
+// Acknowledge any initial connection request. Return negative acknowledgement with message for any errors found. 
+// Dispatch to commandReceived or requestReceived routines to activate the command or get the requested switch state
 void readUSB()
 {
   // Confirm there is input available, read and parse it.
@@ -284,6 +288,7 @@ void readUSB()
  //     Serial.print(":");
  //     Serial.println(value);
 
+      // On initial connection return the version
       if (strcmp(command, "CON") == 0)
       {
         connecting = true; 
@@ -295,24 +300,25 @@ void readUSB()
       // SET: OPEN, CLOSE, ABORT, AUXSET
       else if (strcmp(command, "SET") == 0)
       {
-        if (strcmp(target, "OPEN") == 0)
+        // Prepare to OPEN
+        if (strcmp(target, "OPEN") == 0)                     
         {
           relay = FUNC_OPEN;
           hold = FUNC_OPEN_HOLD;
           timeMove = timeNow;
         }
+        // Prepare to CLOSE
         else if (strcmp(target, "CLOSE") == 0)    
         { 
           relay = FUNC_CLOSE;
           hold = FUNC_CLOSE_HOLD;
           timeMove = timeNow;
         }
+        // Prepare to ABORT
         else if (strcmp(target, "ABORT") == 0)
         {          
-          // If the roof is neither opened or closed, see how long since movement was initiated.
-          // If longer than ROOF_OPEN_MILLI assume it is already stationary and ignore the abort command.                 
-          if ((digitalRead(STATE_OPENED) == LOW) && (digitalRead(STATE_CLOSED) == LOW) && 
-              ((timeNow - timeMove) >= ROOF_OPEN_MILLI))
+          // Test whether or not to Abort
+          if (!isAbortAllowed())
           {           
             error = ERROR10;
           }
@@ -322,6 +328,7 @@ void readUSB()
             hold = FUNC_ABORT_HOLD;
           }
         }
+        // Prepare for the Auxiliary function
         else if (strcmp(target, "AUXSET") == 0)
         { 
           relay = FUNC_AUX;
@@ -344,36 +351,123 @@ void readUSB()
       }
     
       /*
-       * Sem if there is a valid command
+       * See if there was a valid command or request 
        */
       if (!connecting)
       {
         if ((relay == -1) && (sw == -1))
         {
-          sendNak(error);                // Unknown input request or Abort rejection
+          sendNak(error);               // Unknown input or Abort command was rejected
         }
+
+        // Command or Request not implemented
         else if ((relay == 0 || relay == -1) && (sw == 0 || sw == -1))
         {
           strcpy(value, "OFF");
-          sendAck(value);                // No point complaining
-//          sendNak(ERROR9);             // Request Not implemented
+          sendNak(ERROR9);              // Request Not implemented
         }
+
+        // Valid input received
+        
+        // A command was received
+        // Set the relay associated with the command and send acknowlege to host
         else if (relay >= 0)            // Set Relay response
         {
-          setRelay(relay, hold, value);
-          sendAck(value);
+          commandReceived(relay, hold, value);
         }
         
+        // A state request was received
         else if (sw >= 0)               // Get switch response
         {
-          getSwitch(sw, value);
-          sendAck(value);
+          requestReceived(sw);    
         }
       } // end !connecting
     }   // end command parsed
   }     // end SerialUSB input found  
 }
 
+
+////////////////////////////////////////////////////////////////////////////////
+// Abort movement command received, test to see if abort is allowed.
+// If not return false and an error message will be returned to the host. If yes then return true. 
+// If either fully open or fully closed switches are on then deny the request by returning false.
+// If neither switch is on then if there is a specific button (relay) assigned that can stop movement then return true
+// to allow it to do so.
+//
+// This implementation assumes a one button setup and one which does not know if the roof is still moving or 
+// has hit something and already stopped. Before taking action see how long it has been since movement was initiated.
+// If it is longer than the estimate to open or close the roof, assume motion has already stopped. In this case avoid
+// emulating the single button push because that would set the roof moving again. If it seems that the roof 
+// could be moving then return true.
+// 
+// Returning true will cause the Abort request to appear in the commandReceived routine where it will activate
+// the requested relay. 
+// 
+bool isAbortAllowed()
+{
+  unsigned long timeNow = millis();
+  
+  // If the roof is either fully opened or fully closed, ignore the request.
+  if ((digitalRead(STATE_OPENED) == HIGH) || (digitalRead(STATE_CLOSED) == HIGH)) 
+  {
+    return false;
+  }
+
+  // If time since last open or close request is longer than the time for the roof travel return false
+  if ((timeNow - timeMove) >= ROOF_OPEN_MILLI)
+  {
+    return false;
+  }
+  else
+
+  // Abort will be attempted
+  {
+    return true;
+  }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Action command received
+
+// Here after pin associations resolved and request action known
+// Default action is to set the associated relay to the requested state "ON" or "OFF" and
+// send acknowledgement to the host. 
+// target is the name associated with the relay "OPEN", "CLOSE", "AUXSET", "ABORT". It will be used when 
+// sending the acknowledgement to the host. Find out if a certain command it being processed using
+// if (strcmp(target, "OPEN") == 0) {do something}
+//
+// relay: pin id of the relay 
+// hold:  whether relay is to be set permanently =0, or temporarily =1
+// value: How to set the relay "ON" or "OFF" 
+// 
+//
+void commandReceived(int relay, int hold, char* value)
+{
+  setRelay(relay, hold, value);
+  sendAck(value);         // Send acknowledgement that relay pin associated with "target" was activated to value requested
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Here after pin associations resolved and request action known
+// Request to obtain state of a switch
+// Default action is to read the associated switch and return result to the host
+// target is the name associated with the switch "OPENED", "CLOSED" etc and will
+// be used when sending the acknowledgement to the host. Find out if a certain request is being processed using
+// if (strcmp(target, "OPENED") == 0) {do something}
+//
+// sw:     The switch's pin identifier.
+// value   getSwitch will read the pin and set this to "ON" or "OFF" 
+void requestReceived(int sw)
+{
+  getSwitch(sw, value);
+  sendAck(value);            // Send result of reading pin associated with "target" 
+}
+
+
+
+// One time initialization
 void setup() 
 {
   // Initialize the input switches
@@ -405,6 +499,7 @@ void setup()
   }
 }
 
+// Wait here for command or switch request from host
 void loop() 
 {   
   // While there is still a SerialUSB wait for input from the host
