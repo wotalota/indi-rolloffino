@@ -108,7 +108,7 @@ const char* ERROR8 = "Command must map to either set a relay or get a switch";
 const char* ERROR9 = "Request not implemented in controller";
 const char* ERROR10 = "Abort command ignored, roof already stationary";
 
-const char* INFO_1 = "V1.1-1";
+const char* VERSION_ID = "V1.1-2";
 
 void sendAck(char* val)
 {
@@ -292,7 +292,7 @@ void readUSB()
       if (strcmp(command, "CON") == 0)
       {
         connecting = true; 
-        strcpy(value, INFO_1);  // Can be seen on host to confirm what is running       
+        strcpy(value, VERSION_ID);  // Can be seen on host to confirm what is running       
         sendAck(value);
       }
 

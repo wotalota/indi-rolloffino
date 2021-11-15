@@ -59,6 +59,9 @@
 #define MAXINOERR        255         // System call error message buffer
 #define MAXINOWAIT       2  // seconds
 
+// Driver version id
+#define VERSION_ID      "20211115"     
+
 // We declare an auto pointer to RollOffIno.
 std::unique_ptr<RollOffIno> rollOffIno(new RollOffIno());
 
@@ -181,6 +184,7 @@ bool RollOffIno::Handshake()
 {
     bool status = false;
 
+    LOGF_DEBUG("Driver id: %s", VERSION_ID);
     if (PortFD <= 0)
         DEBUG(INDI::Logger::DBG_WARNING,"The connection port has not been established");
     else
