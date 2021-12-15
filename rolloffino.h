@@ -54,6 +54,7 @@ private:
     void updateRoofStatus();
     bool getRoofLockedSwitch(bool*);
     bool getRoofAuxSwitch(bool*);
+    bool setRoofLock(bool switchOn);
     bool setRoofAux(bool switchOn);
     bool readRoofSwitch(const char* roofSwitchId, bool* result);
     bool roofOpen();
@@ -77,14 +78,18 @@ private:
     ILightVectorProperty RoofStatusLP;
     enum { ROOF_STATUS_OPENED, ROOF_STATUS_CLOSED, ROOF_STATUS_MOVING, ROOF_STATUS_LOCKED, ROOF_STATUS_AUXSTATE };
 
+    ISwitch LockS[2];
+    ISwitchVectorProperty LockSP;
+    enum { LOCK_ENABLE, LOCK_DISABLE };
+
     ISwitch AuxS[2];
     ISwitchVectorProperty AuxSP;
     enum { AUX_ENABLE, AUX_DISABLE };
 
-    ISState fullyOpenedLimitSwitch {ISS_OFF };
-    ISState fullyClosedLimitSwitch {ISS_OFF };
-    ISState roofLockedSwitch { ISS_OFF };
-    ISState roofAuxiliarySwitch {ISS_OFF };
+    ISState fullyOpenedLimitSwitch {ISS_OFF};
+    ISState fullyClosedLimitSwitch {ISS_OFF};
+    ISState roofLockedSwitch {ISS_OFF};
+    ISState roofAuxiliarySwitch {ISS_OFF};
     INumber RoofTimeoutN[1] {};
     INumberVectorProperty RoofTimeoutNP;
     enum { EXPIRED_CLEAR, EXPIRED_OPEN, EXPIRED_CLOSE };

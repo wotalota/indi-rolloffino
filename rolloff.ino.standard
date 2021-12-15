@@ -1,4 +1,4 @@
-/*
+ /*
  * A controller example for roof motor controller from the INDI rolloffino roof driver.   
  * 
  * tg August 2018  Original
@@ -18,6 +18,8 @@
 
 #define BAUD_RATE 38400
 
+# define OPEN_CONTACT HIGH    // Switch definition, Change to LOW if pull-down resistors are used.
+
 // Define name to pin assignments
 #define SWITCH_1 A0
 #define SWITCH_2 A1
@@ -31,17 +33,18 @@
 
 // Indirection to define a functional name in terms of a switch
 // Use 0 if switch not implemented
-#define STATE_OPENED SWITCH_1  // Fully opened is assigned to switch 1
-#define STATE_CLOSED SWITCH_2  // Fully closed is assigned to switch 2
-#define STATE_LOCKED SWITCH_3  // External lock
-#define STATE_AUX    SWITCH_4         // Auxiliary switch
+#define SWITCH_OPENED SWITCH_1  // Fully opened is assigned to switch 1
+#define SWITCH_CLOSED SWITCH_2  // Fully closed is assigned to switch 2
+#define SWITCH_LOCKED SWITCH_3  // External lock
+#define SWITCH_AUX    SWITCH_4         // Auxiliary switch
 
 // Indirection to define a functional name in terms of a relay
 // Use 0 if function not supportd
 #define FUNC_OPEN  RELAY_1
 #define FUNC_CLOSE RELAY_1    // For a single button controller might map this also to RELAY_1
-#define FUNC_ABORT RELAY_1    // For a single button controller might map this also to RELAY_1
-#define FUNC_AUX   RELAY_4
+#define FUNC_STOP RELAY_1     // For a single button controller might map this also to RELAY_1
+#define FUNC_LOCK  0          // If automated roof lock is available.
+#define FUNC_AUX   0          // Relay to perform some unspecified function
 
 /*
  * For the relay that the function is mapped to indicate if that relay is to be momentarily closed 
@@ -57,7 +60,8 @@
 */
 #define FUNC_OPEN_HOLD 0
 #define FUNC_CLOSE_HOLD 0
-#define FUNC_ABORT_HOLD 0
+#define FUNC_STOP_HOLD 0
+#define FUNC_LOCK_HOLD 1
 #define FUNC_AUX_HOLD 1
 
 #define RELAY_PRIOR_DELAY 50
@@ -81,6 +85,15 @@
 #define MAX_RESPONSE 127
 #define MAX_MESSAGE 63
 
+enum cmd_input {
+CMD_NONE,  
+CMD_OPEN,
+CMD_CLOSE,
+CMD_STOP,
+CMD_LOCK,
+CMD_AUXSET
+} command_input;
+
 unsigned long timeMove = 0;
 const int cLen = 15;
 const int tLen = 15;
@@ -89,7 +102,7 @@ char command[cLen+1];
 char target[tLen+1];
 char value[vLen+1];
 
-//  Maximum length of messages = 63
+//  Maximum length of messages = 63                                               *|
 const char* ERROR1 = "The controller response message was too long";
 const char* ERROR2 = "The controller failure message was too long";
 const char* ERROR3 = "Command input request is too long";
@@ -101,7 +114,7 @@ const char* ERROR8 = "Command must map to either set a relay or get a switch";
 const char* ERROR9 = "Request not implemented in controller";
 const char* ERROR10 = "Abort command ignored, roof already stationary";
 
-const char* VERSION_ID = "V1.1-2";
+const char* VERSION_ID = "V1.2-0";
 
 void sendAck(char* val)
 {
@@ -170,17 +183,28 @@ void setRelay(int id, int hold, char* value)
 
 /*
  * Get switch value
- * Expect a NO switch configured with a pull down resistor.
- * NO switch: Inactive 0V input to the pin with to pull down resistor, logical 0 input. 
- * When switch closes The positve voltage logical 1 is applied to the input pin. 
+ * Expect a NO switch configured with a pull up resistor.
+ * NO switch: Inactive HIGH input to the pin with pull up resistor, logical 0 input. 
+ * When switch closes The LOW voltage logical 1 is applied to the input pin. 
  * The off or on value is to be sent to the host in the ACK response
  */
 void getSwitch(int id, char* value)
 {
-  if (digitalRead(id) == HIGH)
+  if (digitalRead(id) == OPEN_CONTACT)
     strcpy(value, "OFF");
   else
     strcpy(value, "ON");  
+}
+
+bool isSwitchOn(int id)
+{
+  char switch_value[16+1];
+  getSwitch(id, switch_value);
+  if (strcmp(switch_value, "ON") == 0)
+  {
+    return true;
+  }   
+  return false;
 }
 
 bool parseCommand()           // (command:target:value)
@@ -239,28 +263,31 @@ bool parseCommand()           // (command:target:value)
     else if (!eof)
       sendNak(ERROR6);
     return false;
-   }
-   else
-   {
-     strcpy(command, strtok(inpBuf,"(:"));
-     strcpy(target, strtok(NULL,":"));
-     strcpy(value, strtok(NULL,")"));
-     if ((strlen(command) >= 3) && (strlen(target) >= 1) && (strlen(value) >= 1))
-     {
-       return true;
-     }
-     else
-     {  
-       sendNak(ERROR7); 
-       return false;
-     }
-   }              
+  }
+  else
+  {
+    strcpy(command, strtok(inpBuf,"(:"));
+    strcpy(target, strtok(NULL,":"));
+    strcpy(value, strtok(NULL,")"));
+    if ((strlen(command) >= 3) && (strlen(target) >= 1) && (strlen(value) >= 1))
+    {
+      return true;
+    }
+    else
+    {  
+      sendNak(ERROR7); 
+      return false;
+    }
+  }              
 }
 
-// Use the parseCommand routine to decode message
-// Determine associated action in the message. Resolve the relay or switch associated pin with the target identity.
-// Acknowledge any initial connection request. Return negative acknowledgement with message for any errors found. 
-// Dispatch to commandReceived or requestReceived routines to activate the command or get the requested switch state
+/*
+ * Use the parseCommand routine to decode message
+ * Determine associated action in the message. Resolve the relay or switch associated 
+ * pin with the target identity. Acknowledge any initial connection request. Return 
+ * negative acknowledgement with message for any errors found.  Dispatch to commandReceived
+ * or requestReceived routines to activate the command or get the requested switch state
+ */
 void readUSB()
 {
   // Confirm there is input available, read and parse it.
@@ -284,12 +311,13 @@ void readUSB()
       }
 
       // Map the general input command term to the local action
-      // SET: OPEN, CLOSE, ABORT, AUXSET
+      // SET: OPEN, CLOSE, ABORT, LOCK, AUXSET
       else if (strcmp(command, "SET") == 0)
       {
         // Prepare to OPEN
         if (strcmp(target, "OPEN") == 0)                     
         {
+          command_input = CMD_OPEN;
           relay = FUNC_OPEN;
           hold = FUNC_OPEN_HOLD;
           timeMove = timeNow;
@@ -297,6 +325,7 @@ void readUSB()
         // Prepare to CLOSE
         else if (strcmp(target, "CLOSE") == 0)    
         { 
+          command_input = CMD_CLOSE;
           relay = FUNC_CLOSE;
           hold = FUNC_CLOSE_HOLD;
           timeMove = timeNow;
@@ -304,20 +333,31 @@ void readUSB()
         // Prepare to ABORT
         else if (strcmp(target, "ABORT") == 0)
         {          
+          command_input = CMD_STOP;
+
           // Test whether or not to Abort
-          if (!isAbortAllowed())
+          if (!isStopAllowed())
           {           
             error = ERROR10;
           }
           else
           {             
-            relay = FUNC_ABORT;
-            hold = FUNC_ABORT_HOLD;
+            relay = FUNC_STOP;
+            hold = FUNC_STOP_HOLD;
           }
         }
+        // Prepare for the Lock function
+        else if (strcmp(target, "LOCK") == 0)
+        { 
+          command_input = CMD_LOCK;
+          relay = FUNC_LOCK;
+          hold = FUNC_LOCK_HOLD;
+        }
+
         // Prepare for the Auxiliary function
         else if (strcmp(target, "AUXSET") == 0)
         { 
+          command_input = CMD_AUXSET;
           relay = FUNC_AUX;
           hold = FUNC_AUX_HOLD;
         }
@@ -328,13 +368,13 @@ void readUSB()
       else if (strcmp(command, "GET") == 0)
       {
         if (strcmp(target, "OPENED") == 0)
-          sw = STATE_OPENED;
+          sw = SWITCH_OPENED;
         else if (strcmp(target, "CLOSED") == 0) 
-          sw = STATE_CLOSED;
+          sw = SWITCH_CLOSED;
         else if (strcmp(target, "LOCKED") == 0) 
-          sw = STATE_LOCKED;
+          sw = SWITCH_LOCKED;
         else if (strcmp(target, "AUXSTATE") == 0) 
-          sw = STATE_AUX;
+          sw = SWITCH_AUX;
       }
     
       /*
@@ -350,21 +390,22 @@ void readUSB()
         // Command or Request not implemented
         else if ((relay == 0 || relay == -1) && (sw == 0 || sw == -1))
         {
-          strcpy(value, "OFF");
-          sendNak(ERROR9);              // Request Not implemented
+          strcpy(value, "OFF");          // Request Not implemented
+          //sendNak(ERROR9);   
+          sendAck(value);
         }
 
         // Valid input received
         
         // A command was received
         // Set the relay associated with the command and send acknowlege to host
-        else if (relay >= 0)            // Set Relay response
+        else if (relay > 0)            // Set Relay response
         {
           commandReceived(relay, hold, value);
         }
         
         // A state request was received
-        else if (sw >= 0)               // Get switch response
+        else if (sw > 0)               // Get switch response
         {
           requestReceived(sw);    
         }
@@ -390,12 +431,12 @@ void readUSB()
 // Returning true will cause the Abort request to appear in the commandReceived routine where it will activate
 // the requested relay. 
 // 
-bool isAbortAllowed()
+bool isStopAllowed()
 {
   unsigned long timeNow = millis();
   
   // If the roof is either fully opened or fully closed, ignore the request.
-  if ((digitalRead(STATE_OPENED) == HIGH) || (digitalRead(STATE_CLOSED) == HIGH)) 
+  if (isSwitchOn(SWITCH_OPENED) || isSwitchOn(SWITCH_CLOSED)) 
   {
     return false;
   }
@@ -407,7 +448,7 @@ bool isAbortAllowed()
   }
   else
 
-  // Abort will be attempted
+  // Stop will be attempted
   {
     return true;
   }
@@ -420,9 +461,9 @@ bool isAbortAllowed()
 // Here after pin associations resolved and request action known
 // Default action is to set the associated relay to the requested state "ON" or "OFF" and
 // send acknowledgement to the host. 
-// target is the name associated with the relay "OPEN", "CLOSE", "AUXSET", "ABORT". It will be used when 
-// sending the acknowledgement to the host. Find out if a certain command it being processed using
-// if (strcmp(target, "OPEN") == 0) {do something}
+// target is the name associated with the relay "OPEN", "CLOSE", "STOP", "LOCK", "AUXSET".
+// It will be used when  sending the acknowledgement to the host. Find out if a particular 
+// command is being processed using if (strcmp(target, "OPEN") == 0) {do something}
 //
 // relay: pin id of the relay 
 // hold:  whether relay is to be set permanently =0, or temporarily =1

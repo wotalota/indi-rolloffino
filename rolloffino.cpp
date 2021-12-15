@@ -23,7 +23,7 @@
  * Modified version of the rolloff roof simulator.
  * Uses a simple text string protocol to send messages to an Arduino. The Arduino's USB connection is set
  * by default to 38400 baud. The Arduino code determines which pins open/close a relay to start/stop the
- * roof motor, and read state of switches indicating if roof opened or closed.
+ * roof motor, and read state of switches indicating if the roof is  opened or closed.
  */
 #include "rolloffino.h"
 #include "indicom.h" 
@@ -34,9 +34,9 @@
 #include <ctime>
 #include <memory>
 
-#define ROLLOFF_DURATION 15                  // Seconds until Roof is fully opened or closed
-#define INACTIVE_STATUS  30                  // Seconds between updating status lights
-#define ROR_D_PRESS      1000                // Milliseconds after issuing command before expecting response
+#define ROLLOFF_DURATION 15               // Seconds until Roof is fully opened or closed
+#define INACTIVE_STATUS  5                // Seconds between updating status lights
+#define ROR_D_PRESS      1000             // Milliseconds after issuing command before expecting response
 
 // Read only
 #define ROOF_OPENED_SWITCH "OPENED"
@@ -48,6 +48,7 @@
 #define ROOF_OPEN_RELAY     "OPEN"
 #define ROOF_CLOSE_RELAY    "CLOSE"
 #define ROOF_ABORT_RELAY    "ABORT"
+#define ROOF_LOCK_RELAY     "LOCK"
 #define ROOF_AUX_RELAY      "AUXSET"
 
 // Arduino controller interface limits
@@ -57,7 +58,7 @@
 #define MAXINOLINE       63          // Sized to contain outgoing command requests
 #define MAXINOBUF        255         // Sized for maximum overall input / output
 #define MAXINOERR        255         // System call error message buffer
-#define MAXINOWAIT       2  // seconds
+#define MAXINOWAIT       2           // seconds
 
 // Driver version id
 #define VERSION_ID      "20211115"     
@@ -157,6 +158,10 @@ bool RollOffIno::initProperties()
 {
     INDI::Dome::initProperties();
 
+    IUFillSwitch(&LockS[LOCK_DISABLE], "LOCK_DISABLE", "Off", ISS_ON);
+    IUFillSwitch(&LockS[LOCK_ENABLE], "LOCK_ENABLE", "On", ISS_OFF);
+    IUFillSwitchVector(&LockSP, LockS, 2, getDeviceName(), "LOCK", "Lock", MAIN_CONTROL_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
+
     IUFillSwitch(&AuxS[AUX_DISABLE], "AUX_DISABLE", "Off", ISS_ON);
     IUFillSwitch(&AuxS[AUX_ENABLE], "AUX_ENABLE", "On", ISS_OFF);
     IUFillSwitchVector(&AuxSP, AuxS, 2, getDeviceName(), "AUX", "Auxiliary", MAIN_CONTROL_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
@@ -228,14 +233,16 @@ bool RollOffIno::updateProperties()
     INDI::Dome::updateProperties();
     if (isConnected())
     {
-        defineProperty(&AuxSP);          // Aux Switch,
-        defineProperty(&RoofStatusLP);    // All the roof status lights
+        defineProperty(&LockSP);            // Lock Switch,
+        defineProperty(&AuxSP);             // Aux Switch,
+        defineProperty(&RoofStatusLP);      // All the roof status lights
         defineProperty(&RoofTimeoutNP);
         setupConditions();
     }
     else
     {
         deleteProperty(RoofStatusLP.name);  // Delete the roof status lights
+        deleteProperty(LockSP.name);        // Delete the Lock Switch buttons
         deleteProperty(AuxSP.name);         // Delete the Auxiliary Switch buttons
         deleteProperty(RoofTimeoutNP.name);
     }
@@ -362,6 +369,33 @@ bool RollOffIno::ISNewSwitch(const char *dev, const char *name, ISState *states,
     // Make sure the call is for our device
     if(dev != nullptr && strcmp(dev,getDeviceName()) == 0)
     {
+        // Check if the call for our Lock switch
+        if (strcmp(name, LockSP.name) == 0)
+        {
+            // Find out which state is requested by the client
+            const char *actionName = IUFindOnSwitchName(states, names, n);
+            // If it is the same state as actionName, then we do nothing. i.e.
+            // if actionName is LOCK_ON and our Lock switch is already on, we return
+            int currentLockIndex = IUFindOnSwitchIndex(&LockSP);
+            DEBUGF(INDI::Logger::DBG_SESSION, "Lock state Requested: %s, Current: %s", actionName, LockS[currentLockIndex].name);
+            if (!strcmp(actionName, LockS[currentLockIndex].name))
+            {
+                DEBUGF(INDI::Logger::DBG_SESSION, "Lock switch is already %s", LockS[currentLockIndex].label);
+                LockSP.s = IPS_IDLE;
+                IDSetSwitch(&LockSP, NULL);
+                return true;
+            }
+            // Update the switch state
+            IUUpdateSwitch(&LockSP, states, names, n);
+            currentLockIndex = IUFindOnSwitchIndex(&LockSP);
+            LockSP.s = IPS_OK;
+            IDSetSwitch(&LockSP, nullptr);
+            if (strcmp(LockS[currentLockIndex].name, "LOCK_ENABLE") == 0)
+                switchOn = true;
+            setRoofLock(switchOn);
+            updateRoofStatus();
+        }
+
         // Check if the call for our Aux switch
         if (strcmp(name, AuxSP.name) == 0)
         {
@@ -404,7 +438,7 @@ void RollOffIno::updateRoofStatus()
     getRoofLockedSwitch(&lockedState);
     getRoofAuxSwitch(&auxiliaryState);
 
-    if (!openedState && !closedState & !roofOpening & !roofClosing)
+    if (!openedState && !closedState && !roofOpening && !roofClosing)
         DEBUG(INDI::Logger::DBG_WARNING,"Roof stationary, neither opened or closed, adjust to match PARK button");
     if (openedState && closedState)
         DEBUG(INDI::Logger::DBG_WARNING,"Roof showing it is both opened and closed according to the controller");
@@ -443,20 +477,20 @@ void RollOffIno::updateRoofStatus()
     }
     else
     {
-        if ((openedState || closedState) && (roofOpening || roofClosing))
+        if (openedState || closedState)
         {
-            roofOpening = false;
-            roofClosing = false;
-        }
-        if (openedState && !closedState)
-        {
-            RoofStatusL[ROOF_STATUS_OPENED].s = IPS_OK;
-            RoofStatusLP.s = IPS_OK;
-        }
-        else if (closedState && !openedState)
-        {
-            RoofStatusL[ROOF_STATUS_CLOSED].s = IPS_OK;
-            RoofStatusLP.s = IPS_OK;
+            if (openedState && !closedState)
+            {
+                roofOpening = false;
+                RoofStatusL[ROOF_STATUS_OPENED].s = IPS_OK;
+                RoofStatusLP.s = IPS_OK;
+            }
+            if (closedState && !openedState)
+            {
+                roofClosing = false;
+                RoofStatusL[ROOF_STATUS_CLOSED].s = IPS_OK;
+                RoofStatusLP.s = IPS_OK;
+            }
         }
         else if (roofOpening || roofClosing)
         {
@@ -472,6 +506,7 @@ void RollOffIno::updateRoofStatus()
             }
             RoofStatusLP.s = IPS_BUSY;
         }
+        
         // Roof is stationary, neither opened or closed
         else
         {
@@ -931,6 +966,15 @@ bool RollOffIno::roofAbort()
         return true;
     }
     return pushRoofButton(ROOF_ABORT_RELAY, true, false);
+}
+
+bool RollOffIno::setRoofLock(bool switchOn)
+{
+    if (isSimulation())
+    {
+        return false;
+    }
+    return pushRoofButton(ROOF_LOCK_RELAY, switchOn, true);
 }
 
 bool RollOffIno::setRoofAux(bool switchOn)
