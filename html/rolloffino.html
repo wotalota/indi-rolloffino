@@ -110,7 +110,7 @@ from the arduino.cc web site. https://create.arduino.cc/projecthub/Arduino_Genui
 
 
 <p>
-There are three examples of Arduino code that work with the protocol used by the driver.
+There are four examples of Arduino code that work with the protocol used by the driver.
 </p><ol><li>
 rolloff.ino.standard. This is a non specific general example as a starting point. It is close to the
 AR1450 example. But without the Arduino Due specific code and the pull-down resistor orientation in the specific
@@ -129,6 +129,13 @@ the motor. The driver communication was added to operate in parallel with the ex
 It uses a bank of relays to switch polarity to the motor to control direction. The auxiliary function from the driver is used to
 remotely turn on power for the motor. This Arduino code maintains the state of the roof and monitors local switches to determine when to 
 stop the motor. This approach would be of interest if planning to design that takes direct control of a motor.
+</li><li>
+rolloff.ino.motor. This is some test code to control a 12 volt motor using a SyRen motor driver. 
+This Uno example is a way to work with a motor rather than via a controller such as a gate opener or garage door opener. The fully open and
+fully closed switches are used to know when to stop the motor. The code uses a SyRen motor driver to vary power to the motor and reverse 
+polarity in order to change direction. It uses soft start and soft stop by ramping up and down the speed of the motor to open and close 
+the roof. The SyRen powers the motor and can also supply 5 volts to power an Arduino. It includes code for using local buttons. It has just 
+been bench tested without a load. 
 </li></ol><p>
 
 <p>
@@ -206,7 +213,9 @@ If using a commercial opener of some kind where needed action can be related to 
 <p><i>Intervention routines</i></p>
 
 These routines are when the final action for a command or request is about to take place. They are brought out
-from readUSB to be more obvious.
+from readUSB to be more obvious. They would be extended or changed if the default use of a relay was not what
+was needed. The rolloff.ino.motor sketch demonstrates an example of extending the functionality. It 
+defaults to the relay for some commands and uses additional routines for others such as open, close and stop.
 <p>
 <b>isAbortAllowed</b> 
 <br>Change if default conditionals are not what you need.
@@ -235,8 +244,8 @@ If using an AtMega variant Arduino model you can elect to use the built in pull-
 To do this use INPUT_PULLUP instead of INPUT definition for the input pins. 
 <br>
 For the setting of the relay pins use HIGH or LOW depending on which sets your relays to open.
-
 <br>
+<p>
 <b>loop</b>
 <br>
 This is the loop that waits for driver input.
@@ -265,7 +274,7 @@ Command Format: (command:target|state:value)
 
 <table>
 <tr> <td>state:&nbsp; </td> <td>OPENED | CLOSED | LOCKED | AUXSTATE</td> </tr>
-<tr><td>target: </td><td>OPEN | CLOSE | ABORT | AUXSET</td></tr>
+<tr><td>target: </td><td>OPEN | CLOSE | ABORT | LOCK | AUXSET</td></tr>
 <tr><td>value: </td><td>ON | OFF | 0 | text-message</td></tr>
 </table>
 <p>
@@ -323,16 +332,26 @@ An adjustable potentiometer is visible around the midlle to control how much pow
 <p>
 <img src="aleko_controller.jpg" alt="Aleko Controller">
 <p>
+
 <p>
 Just an image showing the Aleko positioning magnet that the controller detects when the roof has reached the fully opened or fully closed position.
 It shows the track used to drive the roof. The roof will roll a little past where the detector is placed.
-
 <p>
 <img src="aleko_magnet.jpg" alt="Aleko magnet">
+<p>
+
 <p>
 Example of a fully closed detection switch feeding to an Arduino pin.
 <p>
 <img src="switch_closed.jpg" alt="Closed Switch">
+<p>
+
+<p>
+From Arduino rolloff.ino.motor, wiring for controlling a motor using a SyRen driver. The fused power distribution box supplies 12V to 
+the SyRen which in turn feeds 12V to the motor. The switches are used for the open and closed switches. Uno pin 11 white wire is controlling 
+the SyRen. The black and red wires from the SyRen provides ground and 5 volts to power the Uno. 
+<p>
+<img src="motor.jpg" alt="Motor wiring">
 <p>
 
 </body>
