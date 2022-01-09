@@ -12,13 +12,6 @@
  *                  driver
  */
 
-/*
-TODO: 
-Test loss & restoration of wifi
-     host disconnect & reconnect 
-
-      On indi driver side, loss of connection 
-*/
 
 /*
  * This WiFi version of the rolloff.ino is for use with a WIFININA library compatible board 
