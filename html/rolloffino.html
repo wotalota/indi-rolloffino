@@ -111,7 +111,7 @@ from the arduino.cc web site. https://create.arduino.cc/projecthub/Arduino_Genui
 
 
 <p>
-There are four examples of Arduino code that work with the protocol used by the driver.
+There are five examples of Arduino code that work with the protocol used by the driver.
 </p><ol><li>
 rolloff.ino.standard. This is a non specific general example as a starting point. It is close to the
 AR1450 example. But without the Arduino Due specific code and the pull-down resistor orientation in the specific
@@ -140,7 +140,7 @@ been bench tested without a load.
 </li><li>
 rolloff.ino.wifi. This is some test code for using WiFi to connect to the driver. It requires an Arduino model that supports the WIFININA library
 such as the Uno WiFi Rev2. The code is the rolloff.ino.standard modified to use WiFi instead of USB. Might be useful if the observatory 
-computer is located on or next to the telescope. As coded it works on WiFi networks using WPA2 for security. If using an open or WEP secured network,
+computer is located on or next to the telescope. As coded it works on WiFi networks using WPA2 for security. If using an open or WEP secured network
 changes as outlined in the Arduino WIFININA documentation will be needed. It uses a permanently defined internet address and port that matches
 the definition in the rolloffino driver. The changes are identified by the conditional #USE_WIFI. If it was wanted to use WiFi with 
 one of the other examples similar edits could be made. As with the rolloff.ino.motor it is example code without user feedback.
