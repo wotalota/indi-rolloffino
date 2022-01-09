@@ -15,9 +15,10 @@ provides an interface sufficient to open, close and determine if the roof is ful
 <p>
 
 The driver as with other INDI drivers can be on the same host as the Ekos client or remote on a different computer located 
-in the observatory. The Arduino is local to the roll-off roof driver using a USB connection. The Arduino activates the circuits
-that control the roof motor. The motor control can be provided by a re-purposed commercial opener, or a controller suitably
-built or bought to match requirements for the selected motor.
+in the observatory. The Arduino can be local to the roll-off roof driver using a USB connection. The Arduino can optionally 
+be connected to the roll-off roof driver using a WiFi connection. The Arduino activates the circuits that control the roof 
+motor. The motor control can be provided by a re-purposed commercial opener, or a controller suitably built or bought to match 
+requirements for the selected motor.
 
 <h4>The driver</h4>
 <p>
@@ -136,6 +137,13 @@ fully closed switches are used to know when to stop the motor. The code uses a S
 polarity in order to change direction. It uses soft start and soft stop by ramping up and down the speed of the motor to open and close 
 the roof. The SyRen powers the motor and can also supply 5 volts to power an Arduino. It includes code for using local buttons. It has just 
 been bench tested without a load. 
+</li><li>
+rolloff.ino.wifi. This is some test code for using WiFi to connect to the driver. It requires an Arduino model that supports the WIFININA library
+such as the Uno WiFi Rev2. The code is the rolloff.ino.standard modified to use WiFi instead of USB. Might be useful if the observatory 
+computer is located on or next to the telescope. As coded it works on WiFi networks using WPA2 for security. If using an open or WEP secured network,
+changes as outlined in the Arduino WIFININA documentation will be needed. It uses a permanently defined internet address and port that matches
+the definition in the rolloffino driver. The changes are identified by the conditional #USE_WIFI. If it was wanted to use WiFi with 
+one of the other examples similar edits could be made. As with the rolloff.ino.motor it is example code without user feedback.
 </li></ol><p>
 
 <p>

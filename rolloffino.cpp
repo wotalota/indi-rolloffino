@@ -37,7 +37,7 @@
 #define ROLLOFF_DURATION 15               // Seconds until Roof is fully opened or closed
 #define INACTIVE_STATUS  5                // Seconds between updating status lights
 #define ROR_D_PRESS      1000             // Milliseconds after issuing command before expecting response
-
+#define MAX_CNTRL_COM_ERR 10             // Maximum consecutive errors communicating with Arduino
 // Read only
 #define ROOF_OPENED_SWITCH "OPENED"
 #define ROOF_CLOSED_SWITCH "CLOSED"
@@ -604,6 +604,16 @@ void RollOffIno::TimerHit()
         }
     }
 
+    // Added to highlight WiFi issues, not able to recover lost connection without a reconnect
+    if (communicationErrors > MAX_CNTRL_COM_ERR)
+    {
+        LOG_ERROR("Too many errors communicating with Arduino");
+        LOG_ERROR("Try a fresh connect. Check communication equipment and operation of Arduino controller.");
+        INDI::Dome::Disconnect();
+        initProperties();
+        communicationErrors = 0;
+    }
+
     // Even when no roof movement requested, will come through occasionally. Use timer to update roof status
     // in case roof has been operated externally by a remote control, locks applied...
     SetTimer(delay);
@@ -1121,11 +1131,13 @@ bool RollOffIno::readIno(char* retBuf)
         if (status != TTY_OK)
         {
             tty_error_msg(status, errMsg, MAXINOERR);
-            LOGF_DEBUG("roof control connection error: %s", errMsg);
+            LOGF_DEBUG("Roof control connection error: %s", errMsg);
+            communicationErrors++;
             return false;
         }
         if (retCount > 0)
         {
+            communicationErrors = 0;
             if (*bufPtr == 0X28)             // '('   Start found
                 start_found = true;
             if (!start_found)

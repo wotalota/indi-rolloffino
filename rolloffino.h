@@ -96,6 +96,7 @@ private:
     unsigned int roofTimedOut;
     bool simRoofOpen = false;
     bool simRoofClosed = true;
-
+    unsigned int communicationErrors = 0;
+    
 };
 
