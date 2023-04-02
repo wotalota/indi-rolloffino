@@ -28,7 +28,7 @@ The driver output functions will typically close relays to active the roof open 
 The driver input request is to read the state of switches from the Arduino to detect when the roof is fully open
 or fully closed.
 
-Driver: rolloff ino
+Driver: RollOff ino
 Executable: indi_rolloffino
 INDI:       1.8.1
 

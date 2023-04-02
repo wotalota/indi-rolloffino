@@ -20,6 +20,14 @@ be connected to the roll-off roof driver using a WiFi connection. The Arduino ac
 motor. The motor control can be provided by a re-purposed commercial opener, or a controller suitably built or bought to match 
 requirements for the selected motor.
 
+<h4>Source Files</h4>
+<p>
+The source files are available on the github website: https://github.com/wotalota/indi-rolloffino.git
+All the files can be directly downloaded into an empty directory using the git command: git clone https://github.com/wotalota/indi-rolloffino.git
+With the files loaded locally this overview can be opened in the browser using the file download location: html/rolloffino.html
+</p>
+
+
 <h4>The driver</h4>
 <p>
 
@@ -30,8 +38,8 @@ requirements for the selected motor.
 </table>
 <p>
 Provided in a form similar to a INDI third party driver. It does require building and installing, see the INSTALL file for directions.
-The driver is derived from the Ekos roll-off roof simulator driver. USB is the connection mechanism, and it uses a default
-transmission rate of 38400 baud which can be changed in the Arduino code.
+The driver is derived from the Ekos roll-off roof simulator driver. When USB is the connection mechanism, the
+transmission rate can be changed in the Arduino code.
 The driver responds to Park and Unpark requests, these are sent to the Arduino in the form of open and close requests.
 The Arduino uses these requests to open or close relays in order to activate roof movement.  
 The driver will generate requests to obtain the state of the fully open and fully closed sensors to determine when the
@@ -57,7 +65,8 @@ reason there is a discrepancy between the drivers notion of where the roof is ve
 <p>
 <img src="roof_main.png" alt="main">
 <p>
-The connection panel is where the USB connection baud rate can be set to match the Arduino code. It is where the USB used for the connection is established.
+The connection panel is where the USB connection baud rate can be set to match the Arduino code. It is where the USB used for the 
+connection is established. If WiFi is selected the address and port being used by the Arduino is specified.
 <p>
 <img src="roof_connection.png" alt="roof_connection">
 <p>
@@ -107,7 +116,7 @@ The Arduino code examples provides communication with the driver and template co
 The selected starting code will need to be moved to a directory for development. The name of the directory and the name of
 the Arduino sketch should be the same. The code name must have a .ino extension. For example ~/Projects/my-arduino/my-arduino.ino 
 Then you work in the Arduino IDE to edit and load the code onto your Arduino device. The IDE can be downloaded and installed 
-from the arduino.cc web site. https://create.arduino.cc/projecthub/Arduino_Genuino/getting-started-with-the-arduino-desktop-ide-623be4
+from the arduino.cc web site. https://www.arduino.cc/en/software
 
 
 <p>

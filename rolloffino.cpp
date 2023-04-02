@@ -233,6 +233,15 @@ bool RollOffIno::updateProperties()
     INDI::Dome::updateProperties();
     if (isConnected())
     {
+        if (InitPark())
+        {
+            DEBUG(INDI::Logger::DBG_SESSION, "Dome parking data was obtained");
+        }
+            // If we do not have Dome parking data
+        else
+        {
+            DEBUG(INDI::Logger::DBG_SESSION,"Dome parking data was not obtained");
+        }
         defineProperty(&LockSP);            // Lock Switch,
         defineProperty(&AuxSP);             // Aux Switch,
         defineProperty(&RoofStatusLP);      // All the roof status lights
@@ -255,18 +264,6 @@ bool RollOffIno::updateProperties()
 bool RollOffIno::setupConditions()
 {
     updateRoofStatus();
-
-    // If we have Dome parking data
-    if (InitPark())
-    {
-        DEBUG(INDI::Logger::DBG_SESSION, "Dome parking data was obtained");
-    }
-        // If we do not have Dome parking data
-    else
-     {
-         DEBUG(INDI::Logger::DBG_SESSION,"Dome parking data was not obtained");
-     }
-
     Dome::DomeState curState = getDomeState();
     switch (curState)
     {

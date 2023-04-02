@@ -4,11 +4,11 @@ To build the rolloffino roof driver, development libraries and
 3rdparty driver build files are needed. If you do not already have the
 current development files installed, see the directions in the web page below.
 
-https://indilib.org/forum/general/210-howto-building-latest-libindi-ekos.html.
+https://indilib.org/forum/general/210-howto-building-latest-libindi-ekos.html
 Section 1 Contains the normal INDI install directions.
 Section 2 Install the packages to get the development libraries.
           Perform down to and including the git clone to fetch the INDI source
-          tree. Do not do the cmake build unless you want to run you own build
+          tree. Do not do the cmake build unless you want to run your own build
           of INDI.
 Section 3 With your default directory set to ~/Projects or whatever you are
           using for a base. If you already have the 3rdparty drivers installed
@@ -29,7 +29,7 @@ $ git clone https://github.com/wotalota/indi-rolloffino.git
 
 This obtains the rolloffino sources and puts them in
 ~/Projects/indi-3rdparty/indi-rolloffino
-Make a directory below ths and set it as your default in which to do the build.
+Make a directory below this and set it as your default in which to do the build.
 
 $ mkdir indi-rolloffino/build
 $ cd indi-rolloffino/build
